@@ -1,6 +1,6 @@
 {
-  "name": "けんた食堂 ショート検索",
-  "short_name": "ショート検索",
+  "name": "けんた食堂 ショート動画検索",
+  "short_name": "けんた食堂",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
