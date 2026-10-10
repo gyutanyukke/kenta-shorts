@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="YouTubeチャンネル「けんた食堂」のショート動画を、料理名やカテゴリで探せる非公式の検索サイトです。">
 <meta name="theme-color" content="#c2410c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="けんた食堂">
@@ -166,6 +166,31 @@
     flex: none; height: 34px; padding: 0 12px; border-radius: 8px;
     border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer;
   }
+  .site-foot {
+    padding: 20px 16px calc(env(safe-area-inset-bottom) + 28px);
+    font-size: 12px; line-height: 1.7; color: var(--muted); text-align: center;
+  }
+  .site-foot p { margin: 0 0 6px; }
+  .site-foot a { color: var(--muted); }
+  .site-foot nav a { margin: 0 6px; display: inline-block; }
+  .source { font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 8px; }
+  .source a { color: var(--muted); }
+  .consent[hidden] { display: none; }
+  .consent {
+    position: fixed; inset: 0; z-index: 40; background: var(--overlay);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .consent-box {
+    width: 100%; max-width: 640px; background: var(--surface); border-radius: 18px 18px 0 0;
+    padding: 22px 20px calc(env(safe-area-inset-bottom) + 18px);
+  }
+  .consent-box h2 { font-size: 17px; margin: 0 0 10px; }
+  .consent-box p { font-size: 14px; line-height: 1.7; margin: 0 0 10px; }
+  .consent-box a { color: var(--accent); }
+  .consent-box button {
+    width: 100%; height: 50px; margin-top: 6px; border: 0; border-radius: 12px;
+    background: var(--accent); color: #fff; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
   .sheet-foot { padding: 10px 20px calc(env(safe-area-inset-bottom) + 14px); border-top: 1px solid var(--line); }
   .open-yt {
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -202,6 +227,17 @@
   <div class="empty" id="empty" hidden>該当する動画がありません</div>
 </main>
 
+<footer class="site-foot">
+  <p>非公式のファンサイトです。YouTube、Google、けんた食堂とは関係ありません。</p>
+  <p>動画情報の出典：<a href="https://www.youtube.com/@oi_ken/shorts" target="_blank" rel="noopener">YouTube「けんた食堂」</a>（YouTube Data API で取得）。<br>タイトル・概要・サムネイルの著作権は投稿者に帰属します。</p>
+  <nav>
+    <a href="policy.html#terms">利用規約</a>
+    <a href="policy.html#privacy">プライバシーポリシー</a>
+    <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube利用規約</a>
+    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Googleプライバシーポリシー</a>
+  </nav>
+</footer>
+
 <div class="overlay" id="overlay"></div>
 <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="s-title" aria-hidden="true">
   <div class="grab" id="grab"><span></span></div>
@@ -219,9 +255,19 @@
   </div>
   <div class="sheet-foot">
     <a class="open-yt" id="s-open" target="_blank" rel="noopener">▶ YouTubeで開く</a>
+    <p class="source">出典：YouTube　著作権は投稿者に帰属します</p>
   </div>
 </section>
 <div class="toast" id="toast">コピーしました</div>
+
+<div class="consent" id="consent" role="dialog" aria-modal="true" aria-labelledby="consent-title" hidden>
+  <div class="consent-box">
+    <h2 id="consent-title">ご利用の前に</h2>
+    <p>このサイトは「けんた食堂」のショート動画を探しやすくする<strong>非公式のファンサイト</strong>です。YouTube API サービスを利用しています。</p>
+    <p>ご利用には、<a href="policy.html#terms">利用規約</a>・<a href="policy.html#privacy">プライバシーポリシー</a>、および<a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube利用規約</a>への同意が必要です。</p>
+    <button id="agree">同意して利用する</button>
+  </div>
+</div>
 
 <script src="classify.js"></script>
 <script>
@@ -547,6 +593,21 @@
     }
   };
   load();
+
+  // 初回のみ利用規約への同意を求める（同意の有無だけを端末に保存）
+  const CONSENT_KEY = 'consent-v1';
+  let agreed = false;
+  try { agreed = localStorage.getItem(CONSENT_KEY) === '1'; } catch { /* 保存できない環境では毎回表示 */ }
+  if (!agreed) {
+    $('consent').hidden = false;
+    document.body.classList.add('locked');
+    $('agree').focus();
+  }
+  $('agree').addEventListener('click', () => {
+    try { localStorage.setItem(CONSENT_KEY, '1'); } catch { /* 無視 */ }
+    $('consent').hidden = true;
+    document.body.classList.remove('locked');
+  });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});

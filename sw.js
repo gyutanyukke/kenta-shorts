@@ -1,6 +1,6 @@
 // すべてネットワーク優先。圏外のときだけ前回保存した内容を使う
-const CACHE = 'shorts-v2';
-const SHELL = ['./', 'index.html', 'classify.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
+const CACHE = 'shorts-v3';
+const SHELL = ['./', 'index.html', 'policy.html', 'classify.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'data/videos.json', 'data/synonyms.json', 'data/categories.json', 'data/category-overrides.json'];
 
 self.addEventListener('install', e => {
