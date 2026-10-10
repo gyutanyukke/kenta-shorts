@@ -1,0 +1,64 @@
+name: ショート一覧を更新して公開
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # 毎日 13:00 JST（GitHubの混雑で数分〜数十分遅れることがあります）
+  workflow_dispatch:       # 手動実行（Actions タブの「Run workflow」）
+    inputs:
+      full:
+        description: '全件取り直す'
+        type: boolean
+        default: false
+  push:
+    branches: [main]       # 画面や辞書を直したときも公開し直す
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: YouTube から取得
+        if: github.event_name != 'push'
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          FULL: ${{ inputs.full && '1' || '0' }}
+        run: node scripts/fetch-videos.mjs
+
+      - name: データをコミット
+        if: github.event_name != 'push'
+        run: |
+          if git diff --quiet -- data/videos.json; then
+            echo "変更なし"
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/videos.json
+            git commit -m "データ更新 $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
