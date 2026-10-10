@@ -1,0 +1,4 @@
+{
+  "_説明": "自動判定を上書きします。動画ID（URLの shorts/ の後ろ）とカテゴリIDの一覧を書きます。カテゴリIDは「大分類ID/小分類ID」（categories.json の id）。例： \"abc123XYZ00\": [\"okazu/niku\", \"gohan/don\"]  空の [] にすると未分類になります",
+  "例_abc123XYZ00": ["okazu/niku", "gohan/don"]
+}

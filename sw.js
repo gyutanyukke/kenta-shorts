@@ -1,9 +1,10 @@
-// 画面はキャッシュ優先、データはネットワーク優先（圏外なら前回のデータ）
-const CACHE = 'shorts-v1';
-const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+// すべてネットワーク優先。圏外のときだけ前回保存した内容を使う
+const CACHE = 'shorts-v2';
+const SHELL = ['./', 'index.html', 'classify.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
+  'data/videos.json', 'data/synonyms.json', 'data/categories.json', 'data/category-overrides.json'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
@@ -12,14 +13,11 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  const networkFirst = url.pathname.includes('/data/') || e.request.mode === 'navigate';
-  if (networkFirst) {
-    e.respondWith(fetch(e.request).then(res => {
+  e.respondWith(fetch(e.request).then(res => {
+    if (res.ok) {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
-      return res;
-    }).catch(() => caches.match(e.request, { ignoreSearch: true })));
-  } else {
-    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
-  }
+    }
+    return res;
+  }).catch(() => caches.match(e.request, { ignoreSearch: true })));
 });

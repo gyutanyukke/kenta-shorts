@@ -6,6 +6,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const CHANNEL_ID = process.env.CHANNEL_ID || 'UCWsAvz-plMpc8dgiaoMb0XQ'; // @oi_ken（けんた食堂）
 const API_KEY = process.env.YT_API_KEY;
@@ -143,6 +144,29 @@ async function main() {
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT, JSON.stringify(out, null, 1) + '\n');
   console.log(`${full ? '全件' : '差分'}取得：${videos.length}件（新規 ${added}件、判定方式 ${method}、使用クォータ約 ${quota}）`);
+  await reportCategories(videos);
+}
+
+// カテゴリ判定の結果をログに出す（未分類のタイトルを辞書追加の参考にする）
+async function reportCategories(videos) {
+  try {
+    const require = createRequire(import.meta.url);
+    const C = require(`${ROOT}/classify.js`);
+    const cats = C.compile(JSON.parse(await readFile(`${ROOT}/data/categories.json`, 'utf8')));
+    let overrides = {};
+    try { overrides = JSON.parse(await readFile(`${ROOT}/data/category-overrides.json`, 'utf8')); } catch { /* なし */ }
+    const results = videos.map(v => ({ v, r: C.classify(cats, v, overrides) }));
+    const none = results.filter(x => !x.r.cats.length);
+    const guessed = results.filter(x => x.r.source === 'description');
+    console.log(`カテゴリ：分類済み ${videos.length - none.length}件 / 概要から推定 ${guessed.length}件 / 未分類 ${none.length}件`);
+    if (none.length) {
+      console.log('--- 未分類の動画（categories.json にキーワードを足すか、category-overrides.json で指定） ---');
+      for (const { v } of none.slice(0, 100)) console.log(`${v.id}  ${v.title}`);
+      if (none.length > 100) console.log(`…ほか ${none.length - 100}件`);
+    }
+  } catch (e) {
+    console.warn('カテゴリ集計をスキップしました：', e.message);
+  }
 }
 
 main().catch(e => {

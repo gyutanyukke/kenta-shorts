@@ -76,7 +76,33 @@
     color: var(--muted); font-size: 20px; display: none; cursor: pointer;
   }
   .clear.show { display: block; }
+  .chips {
+    display: flex; gap: 6px; overflow-x: auto; margin: 10px -16px 0; padding: 0 16px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips.sub { margin-top: 6px; }
+  .chips[hidden], .guess[hidden] { display: none; }
+  .chip {
+    flex: none; height: 34px; padding: 0 12px; border-radius: 17px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
+    font: inherit; font-size: 14px; white-space: nowrap; cursor: pointer;
+  }
+  .chip .n { font-size: 11.5px; color: var(--muted); margin-left: 3px; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .chip.on .n { color: rgba(255,255,255,.85); }
+  .chips.sub .chip { height: 30px; font-size: 13px; background: var(--bg); }
+  .chips.sub .chip.on { background: var(--accent-weak); border-color: var(--accent); color: var(--text); }
+  .chips.sub .chip.on .n { color: var(--muted); }
+  .chip.none { border-style: dashed; color: var(--muted); }
   .count { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag {
+    height: 30px; padding: 0 10px; border-radius: 15px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .tag small { color: var(--muted); margin-right: 4px; }
+  .guess { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .count b { color: var(--text); }
 
   main { padding: 4px 0 calc(env(safe-area-inset-bottom) + 24px); }
@@ -166,6 +192,8 @@
            placeholder="タイトルで検索（例：アジ）" aria-label="タイトルで検索">
     <button class="clear" id="clear" aria-label="入力を消す">×</button>
   </div>
+  <nav class="chips" id="groups" aria-label="カテゴリ"></nav>
+  <nav class="chips sub" id="subs" aria-label="小分類" hidden></nav>
   <div class="count" id="count">読み込み中…</div>
 </header>
 
@@ -186,6 +214,7 @@
     <div class="field"><p class="label">URL</p>
       <div class="url"><a id="s-url" target="_blank" rel="noopener"></a><button class="copy" id="copy">コピー</button></div>
     </div>
+    <div class="field"><p class="label">カテゴリ</p><div class="tags" id="s-cats"></div><div class="guess" id="s-guess" hidden></div></div>
     <div class="field"><p class="label">概要</p><div class="desc" id="s-desc"></div></div>
   </div>
   <div class="sheet-foot">
@@ -194,6 +223,7 @@
 </section>
 <div class="toast" id="toast">コピーしました</div>
 
+<script src="classify.js"></script>
 <script>
 (() => {
   'use strict';
@@ -201,6 +231,8 @@
   let videos = [];
   let synonyms = {};
   let current = null;
+  let cats = null;        // コンパイル済みカテゴリ辞書
+  let cat = '';           // 選択中：'' | 'okazu' | 'okazu/niku' | 'none'
 
   // ---------- 検索用の正規化 ----------
   // 全角/半角・大文字/小文字・カタカナ/ひらがなを同一視する
@@ -270,12 +302,76 @@
     return out + (inMark ? '</mark>' : '');
   };
 
+  // ---------- カテゴリ ----------
+  const inCat = (v, c) => {
+    if (!c) return true;
+    if (c === 'none') return v._cats.length === 0;
+    if (c.includes('/')) return v._cats.includes(c);
+    return v._cats.some(id => id.startsWith(c + '/'));
+  };
+  const catLabel = c => {
+    if (!c) return '';
+    if (c === 'none') return '未分類';
+    const [g] = c.split('/');
+    const group = cats.groups.find(x => x.id === g);
+    if (!group) return '';
+    return c.includes('/') ? `${group.short} › ${cats.byId[c].name}` : group.name;
+  };
+  const chip = (value, label, n, on, extra = '') =>
+    `<button class="chip${on ? ' on' : ''}${extra}" data-cat="${esc(value)}" aria-pressed="${on}">${esc(label)}<span class="n">${n}</span></button>`;
+
+  const renderChips = textList => {
+    if (!cats) return;
+    const g0 = cat.split('/')[0];
+    const count = c => textList.filter(v => inCat(v, c)).length;
+    let html = chip('', 'すべて', textList.length, !cat);
+    for (const g of cats.groups) {
+      const n = count(g.id);
+      if (n || g0 === g.id) html += chip(g.id, g.short, n, g0 === g.id);
+    }
+    const nn = count('none');
+    if (nn || cat === 'none') html += chip('none', '未分類', nn, cat === 'none', ' none');
+    const keep = $('groups').scrollLeft;
+    $('groups').innerHTML = html;
+    $('groups').scrollLeft = keep;
+
+    const group = cats.groups.find(x => x.id === g0);
+    $('subs').hidden = !group;
+    if (group) {
+      let sub = chip(group.id, `${group.short}すべて`, count(group.id), cat === group.id);
+      for (const it of group.items) {
+        const n = count(it.id);
+        if (n || cat === it.id) sub += chip(it.id, it.name, n, cat === it.id);
+      }
+      const keepSub = $('subs').dataset.g === g0 ? $('subs').scrollLeft : 0;
+      $('subs').innerHTML = sub;
+      $('subs').dataset.g = g0;
+      $('subs').scrollLeft = keepSub;
+    }
+  };
+
+  const setCat = c => {
+    cat = c;
+    const url = new URL(location.href);
+    c ? url.searchParams.set('c', c) : url.searchParams.delete('c');
+    history.replaceState(history.state, '', url);
+    render();
+    window.scrollTo(0, 0);
+    const on = $('groups').querySelector('.on');
+    if (on) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  };
+
   const render = () => {
     const q = $('q').value;
-    const { list, words } = filter(q);
+    const { list: textList, words } = filter(q);
+    const list = textList.filter(v => inCat(v, cat));
+    renderChips(textList);
     $('clear').classList.toggle('show', q.length > 0);
-    $('count').innerHTML = q.trim()
-      ? `「${esc(q.trim())}」<b>${list.length}</b>件 / 全${videos.length}件`
+    const parts = [];
+    if (cat) parts.push(esc(catLabel(cat)));
+    if (q.trim()) parts.push(`「${esc(q.trim())}」`);
+    $('count').innerHTML = parts.length
+      ? `${parts.join(' ＋ ')} <b>${list.length}</b>件 / 全${videos.length}件`
       : `全<b>${videos.length}</b>件（新しい順）`;
     $('empty').hidden = list.length > 0;
     $('list').innerHTML = list.map(v => `
@@ -295,6 +391,18 @@
     $('s-url').textContent = v.url;
     $('s-url').href = v.url;
     $('s-open').href = v.url;
+    if (cats) {
+      $('s-cats').innerHTML = v._cats.length
+        ? v._cats.map(id => {
+            const it = cats.byId[id];
+            const g = cats.groups.find(x => x.id === it.group);
+            return `<button class="tag" data-cat="${esc(id)}"><small>${esc(g.short)}</small>${esc(it.name)}</button>`;
+          }).join('')
+        : `<button class="tag" data-cat="none">未分類</button>`;
+      const note = { description: 'タイトルから判定できなかったため、概要から推定した分類です', none: 'タイトル・概要から判定できませんでした', manual: '手動で設定した分類です' }[v._src];
+      $('s-guess').hidden = !note;
+      $('s-guess').textContent = note || '';
+    }
     $('s-desc').innerHTML = v.description ? linkify(v.description) : '<span style="color:var(--muted)">（概要なし）</span>';
     $('sheet-body').scrollTop = 0;
     $('sheet').style.transform = '';
@@ -338,6 +446,23 @@
     const v = videos.find(x => x.id === b.dataset.id);
     if (v) openSheet(v);
   });
+  $('groups').addEventListener('click', e => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    const c = b.dataset.cat;
+    // 選択中の大分類をもう一度押したら解除
+    setCat(c && c === cat ? '' : c);
+  });
+  $('subs').addEventListener('click', e => {
+    const b = e.target.closest('[data-cat]');
+    if (b) setCat(b.dataset.cat);
+  });
+  $('s-cats').addEventListener('click', e => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    closeSheet();
+    setCat(b.dataset.cat);
+  });
   $('close').addEventListener('click', () => closeSheet());
   $('overlay').addEventListener('click', () => closeSheet());
   window.addEventListener('popstate', () => closeSheet(true));
@@ -377,9 +502,12 @@
   // ---------- 読み込み ----------
   const load = async () => {
     try {
-      const [vRes, sRes] = await Promise.all([
-        fetch('data/videos.json', { cache: 'no-cache' }),
-        fetch('data/synonyms.json', { cache: 'no-cache' }).catch(() => null),
+      const opt = { cache: 'no-cache' };
+      const [vRes, sRes, cRes, oRes] = await Promise.all([
+        fetch('data/videos.json', opt),
+        fetch('data/synonyms.json', opt).catch(() => null),
+        fetch('data/categories.json', opt).catch(() => null),
+        fetch('data/category-overrides.json', opt).catch(() => null),
       ]);
       const data = await vRes.json();
       if (sRes && sRes.ok) {
@@ -389,16 +517,29 @@
           synonyms[normalize(k)] = list;
         }
       }
-      videos = (data.videos || []).map(v => ({ ...v, _n: normalize(v.title) }));
+      let overrides = {};
+      try {
+        if (cRes && cRes.ok && window.Classifier) cats = Classifier.compile(await cRes.json());
+        if (oRes && oRes.ok) overrides = await oRes.json();
+      } catch (e) { cats = null; console.error('カテゴリ辞書を読み込めませんでした', e); }
+      videos = (data.videos || []).map(v => {
+        const r = cats ? Classifier.classify(cats, v, overrides) : { cats: [], source: 'none' };
+        return { ...v, _n: normalize(v.title), _cats: r.cats, _src: r.source };
+      });
       if (data.fetchedAt) {
         const d = new Date(data.fetchedAt);
         $('updated').textContent = `更新 ${fmtDate(data.fetchedAt)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       } else {
         $('updated').textContent = '未取得';
       }
-      const q = new URL(location.href).searchParams.get('q');
+      const params = new URL(location.href).searchParams;
+      const q = params.get('q');
       if (q) $('q').value = q;
+      const c = params.get('c') || '';
+      if (cats && (c === 'none' || cats.byId[c] || cats.groups.some(g => g.id === c))) cat = c;
       render();
+      const on = $('groups').querySelector('.on');
+      if (on && cat) on.scrollIntoView({ inline: 'center', block: 'nearest' });
     } catch (err) {
       $('count').textContent = 'データを読み込めませんでした。通信状況を確認してください。';
       console.error(err);
